@@ -1,0 +1,55 @@
+// Prisma schema for AstroVedham Phase 1
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADMIN") // e.g., ADMIN, SUPER_ADMIN
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique
+  email     String?  @unique
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum OrderStatus {
+  PENDING
+  SUCCESS
+  CANCELLED
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique // Format: AV-YYYYMMDD-XXXXXX
+  customerId      String
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  horoscopeType   String      // life_horoscope, marriage_matching, etc.
+  horoscopeTitle  String
+  inputDetails    Json        // Stores birth details, partner details, etc.
+  amount          Decimal     @db.Decimal(10, 2)
+  currency        String      @default("INR")
+  status          OrderStatus @default(PENDING)
+  pdfPath         String?     // Path to the uploaded report
+  resultAvailable Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+}

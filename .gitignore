@@ -1,0 +1,22 @@
+# Dependency directories
+node_modules/
+
+# Build directory
+dist/
+
+# Environment variables
+.env
+
+# Prisma
+/prisma/migrations/
+*.db
+*.db-journal
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
