@@ -6,6 +6,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import adminRoutes from './routes/admin';
 import orderRoutes from './routes/orderRoutes';
+import serviceRoutes from './routes/serviceRoutes';
+import authRoutes from './routes/authRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +32,8 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
 // Routes
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/services', serviceRoutes);
+app.use('/api/v1/auth', authRoutes);
 
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: any) => {

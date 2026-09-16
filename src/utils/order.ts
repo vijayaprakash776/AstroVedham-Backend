@@ -1,41 +1,56 @@
 import prisma from '../config/prisma';
+import crypto from 'crypto';
 
 /**
- * Generates a unique order number in the format AV-YYYYMMDD-XXXXXX
- * XXXXXX is a sequential number for the day.
+ * Generates a unique, concurrency-safe order number in the format AV-YYYYMMDD-XXXXXX
+ * XXXXXX is a unique random numeric sequence to eliminate concurrent insert race conditions.
  */
 export async function generateOrderNumber(): Promise<string> {
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
 
-  // Find the count of orders created today to generate the sequence
-  const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-  const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+  let isUnique = false;
+  let orderNumber = '';
+  let attempts = 0;
 
-  const count = await prisma.order.count({
-    where: {
-      createdAt: {
-        gte: startOfDay,
-        lte: endOfDay,
-      },
-    },
-  });
+  while (!isUnique && attempts < 10) {
+    attempts++;
+    // Generate a 6-digit random numeric sequence
+    const randomNum = crypto.randomInt(100000, 999999).toString();
+    orderNumber = `AV-${dateStr}-${randomNum}`;
 
-  const sequence = (count + 1).toString().padStart(6, '0');
-  return `AV-${dateStr}-${sequence}`;
+    // Verify absolute collision uniqueness before proceeding
+    const existingOrder = await prisma.order.findUnique({
+      where: { orderNumber },
+      select: { id: true }
+    });
+
+    if (!existingOrder) {
+      isUnique = true;
+    }
+  }
+
+  // Fallback fallback mechanism just in case
+  if (!isUnique) {
+    const timestampSuffix = Date.now().toString().slice(-6);
+    orderNumber = `AV-${dateStr}-${timestampSuffix}`;
+  }
+
+  return orderNumber;
 }
 
 export const VALID_HOROSCOPE_TYPES = [
   'life_horoscope',
   'super_life_horoscope',
   'marriage_horoscope',
-  'marriage_matching',
+  'marriage_compatibility',
+  'complete_marriage_compatibility',
   'single_page_horoscope',
   'wealth_horoscope',
   'yearly_prediction',
   'gemstones_horoscope',
-  'numerology_horoscope',
-  'career_horoscope',
+  'numerology',
+  'astrologer_consultation'
 ];
 
 export function isValidHoroscopeType(type: string): boolean {

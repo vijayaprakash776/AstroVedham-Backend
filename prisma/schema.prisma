@@ -20,13 +20,28 @@ model Admin {
 }
 
 model Customer {
-  id        String   @id @default(uuid())
-  name      String
-  phone     String   @unique
-  email     String?  @unique
-  orders    Order[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String    @id @default(uuid())
+  name         String
+  phone        String    @unique
+  email        String?   @unique
+  otpHash      String?
+  otpExpiresAt DateTime?
+  orders       Order[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Service {
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  title           String
+  description     String?
+  price           Decimal  @db.Decimal(10, 2)
+  active          Boolean  @default(true)
+  displayPosition Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  orders          Order[]
 }
 
 enum OrderStatus {
@@ -40,6 +55,8 @@ model Order {
   orderNumber     String      @unique // Format: AV-YYYYMMDD-XXXXXX
   customerId      String
   customer        Customer    @relation(fields: [customerId], references: [id])
+  serviceId       String?
+  service         Service?    @relation(fields: [serviceId], references: [id])
   horoscopeType   String      // life_horoscope, marriage_matching, etc.
   horoscopeTitle  String
   inputDetails    Json        // Stores birth details, partner details, etc.
@@ -47,6 +64,7 @@ model Order {
   currency        String      @default("INR")
   status          OrderStatus @default(PENDING)
   pdfPath         String?     // Path to the uploaded report
+  guestTokenHash  String?     // Secure hash of the guest access token
   resultAvailable Boolean     @default(false)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
