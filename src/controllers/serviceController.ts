@@ -24,8 +24,15 @@ export const getServices = async (req: Request, res: Response) => {
         active: s.active
       }))
     });
-  } catch (error) {
-    console.error('Get services error:', error);
+  } catch (error: any) {
+    console.error('Service catalog retrieval failed', {
+      method: req.method,
+      path: req.originalUrl,
+      name: error?.name,
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
     return res.status(500).json({
       success: false,
       message: 'Failed to retrieve service catalog'
