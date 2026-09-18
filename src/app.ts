@@ -32,6 +32,51 @@ app.get('/api/v1/health', (req: Request, res: Response) => {
   res.status(200).json({ success: true, message: 'AstroVedham backend is running' });
 });
 
+// Public diagnostic endpoint (Internal use only, no sensitive data exposed)
+app.get('/api/v1/public/diagnostics', async (req: Request, res: Response) => {
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+
+    const adminCount = await prisma.admin.count();
+    const serviceCount = await prisma.service.count();
+
+    let dbHost = 'unknown';
+    if (process.env.DATABASE_URL) {
+      try {
+        const parts = process.env.DATABASE_URL.split('@');
+        if (parts.length > 1) {
+          dbHost = parts[1].split('/')[0].split(':')[0];
+        }
+      } catch (e) {
+        dbHost = 'parse-error';
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        nodeEnv: process.env.NODE_ENV,
+        dbStatus: 'connected',
+        dbHost,
+        adminCount,
+        serviceCount,
+        jwtSecretConfigured: !!process.env.JWT_SECRET,
+        timestamp: new Date().toISOString(),
+        deploymentVersion: '1f08390+'
+      }
+    });
+    await prisma.$disconnect();
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      errorName: error.name,
+      errorMessage: error.message,
+      prismaCode: error.code || null
+    });
+  }
+});
+
 // Routes
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/orders', orderRoutes);
