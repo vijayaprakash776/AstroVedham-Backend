@@ -1,18 +1,21 @@
 import express, { Application, Request, Response } from 'express';
+import dotenv from 'dotenv';
+// Load environment variables immediately
+dotenv.config();
+
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import path from 'path';
 import adminRoutes from './routes/admin';
 import orderRoutes from './routes/orderRoutes';
 import serviceRoutes from './routes/serviceRoutes';
 import authRoutes from './routes/authRoutes';
 
-// Load environment variables
-dotenv.config();
-
 const app: Application = express();
+
+// Trust proxy for Railway/Load Balancers
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());

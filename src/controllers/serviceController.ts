@@ -20,7 +20,7 @@ export const getServices = async (req: Request, res: Response) => {
         slug: s.slug,
         title: s.title,
         description: s.description,
-        price: s.price,
+        price: s.price.toString(),
         active: s.active
       }))
     });
