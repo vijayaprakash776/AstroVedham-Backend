@@ -24,7 +24,7 @@ export const sendOtp = async (req: Request, res: Response) => {
 
   try {
     // Generate a secure 6 digit numeric code
-    const isMockEnabled = process.env.MOCK_OTP_ENABLED !== 'false' && (process.env.NODE_ENV !== 'production' || process.env.MOCK_OTP_ENABLED === 'true');
+    const isMockEnabled = process.env.MOCK_OTP_ENABLED === 'true' || (process.env.NODE_ENV !== 'production' && process.env.MOCK_OTP_ENABLED !== 'false');
     const otp = isMockEnabled
       ? (process.env.MOCK_OTP || '123456')
       : Math.floor(100000 + Math.random() * 900000).toString();
@@ -90,7 +90,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     }
 
     // Validate hash match
-    const isMockEnabled = process.env.MOCK_OTP_ENABLED !== 'false' && (process.env.NODE_ENV !== 'production' || process.env.MOCK_OTP_ENABLED === 'true');
+    const isMockEnabled = process.env.MOCK_OTP_ENABLED === 'true' || (process.env.NODE_ENV !== 'production' && process.env.MOCK_OTP_ENABLED !== 'false');
     const mockOtp = process.env.MOCK_OTP || '123456';
     const isMockOtp = isMockEnabled && otp === mockOtp;
 
