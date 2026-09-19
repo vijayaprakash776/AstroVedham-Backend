@@ -24,8 +24,9 @@ export const sendOtp = async (req: Request, res: Response) => {
 
   try {
     // Generate a secure 6 digit numeric code
-    const otp = process.env.NODE_ENV === 'development'
-      ? '123456'
+    const isMockEnabled = process.env.MOCK_OTP_ENABLED !== 'false' && (process.env.NODE_ENV !== 'production' || process.env.MOCK_OTP_ENABLED === 'true');
+    const otp = isMockEnabled
+      ? (process.env.MOCK_OTP || '123456')
       : Math.floor(100000 + Math.random() * 900000).toString();
 
     const otpHash = hashOtp(otp);
@@ -89,12 +90,15 @@ export const verifyOtp = async (req: Request, res: Response) => {
     }
 
     // Validate hash match
-    if (hashOtp(otp) !== customer.otpHash) {
-      if ((process.env.NODE_ENV === 'development' || process.env.MOCK_OTP_ENABLED === 'true') && otp === '123456') {
-        // Safe, isolated development configuration fallback for testing/mocking
-      } else {
-        return res.status(401).json({ success: false, message: 'Incorrect verification code' });
+    const isMockEnabled = process.env.MOCK_OTP_ENABLED !== 'false' && (process.env.NODE_ENV !== 'production' || process.env.MOCK_OTP_ENABLED === 'true');
+    const mockOtp = process.env.MOCK_OTP || '123456';
+    const isMockOtp = isMockEnabled && otp === mockOtp;
+
+    if (hashOtp(otp) !== customer.otpHash && !isMockOtp) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[AUTH DEBUG] OTP Verification failed. Received: ${otp}, Mock Enabled: ${isMockEnabled}, Mock OTP: ${mockOtp}`);
       }
+      return res.status(401).json({ success: false, message: 'Incorrect verification code' });
     }
 
     // Consume the OTP code (one-time use)
