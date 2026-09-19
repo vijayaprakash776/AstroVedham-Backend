@@ -62,8 +62,9 @@ app.get('/api/v1/public/diagnostics', async (req: Request, res: Response) => {
         adminCount,
         serviceCount,
         jwtSecretConfigured: !!process.env.JWT_SECRET,
+        mockOtpEnabled: process.env.MOCK_OTP_ENABLED === 'true',
         timestamp: new Date().toISOString(),
-        deploymentVersion: '1f08390+'
+        deploymentVersion: '20970ff+'
       }
     });
     await prisma.$disconnect();

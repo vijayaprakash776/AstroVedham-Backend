@@ -24,7 +24,7 @@ export const sendOtp = async (req: Request, res: Response) => {
 
   try {
     // Generate a secure 6 digit numeric code
-    const isMockEnabled = process.env.MOCK_OTP_ENABLED === 'true' || (process.env.NODE_ENV !== 'production' && process.env.MOCK_OTP_ENABLED !== 'false');
+    const isMockEnabled = process.env.MOCK_OTP_ENABLED === 'true';
     const otp = isMockEnabled
       ? (process.env.MOCK_OTP || '123456')
       : Math.floor(100000 + Math.random() * 900000).toString();
@@ -90,14 +90,12 @@ export const verifyOtp = async (req: Request, res: Response) => {
     }
 
     // Validate hash match
-    const isMockEnabled = process.env.MOCK_OTP_ENABLED === 'true' || (process.env.NODE_ENV !== 'production' && process.env.MOCK_OTP_ENABLED !== 'false');
+    const isMockEnabled = process.env.MOCK_OTP_ENABLED === 'true';
     const mockOtp = process.env.MOCK_OTP || '123456';
     const isMockOtp = isMockEnabled && otp === mockOtp;
 
     if (hashOtp(otp) !== customer.otpHash && !isMockOtp) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[AUTH DEBUG] OTP Verification failed. Received: ${otp}, Mock Enabled: ${isMockEnabled}, Mock OTP: ${mockOtp}`);
-      }
+      console.warn(`[AUTH] OTP Verification failed for phone ${cleanedPhone}. MockEnabled: ${isMockEnabled}`);
       return res.status(401).json({ success: false, message: 'Incorrect verification code' });
     }
 
