@@ -7,6 +7,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import fs from 'fs';
 import adminRoutes from './routes/admin';
 import orderRoutes from './routes/orderRoutes';
 import serviceRoutes from './routes/serviceRoutes';
@@ -23,6 +24,12 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Ensure upload directory structure exists on startup
+const uploadHoroscopesDir = path.join(process.cwd(), 'uploads/horoscopes');
+if (!fs.existsSync(uploadHoroscopesDir)) {
+  fs.mkdirSync(uploadHoroscopesDir, { recursive: true });
+}
 
 // Serve uploaded files securely (optional, but needed for admin to view reports)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));

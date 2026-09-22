@@ -2,7 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-const uploadDir = path.join(process.cwd(), 'uploads/horoscopes');
+const uploadDir = path.resolve(process.cwd(), 'uploads/horoscopes');
 
 // Ensure directory exists
 if (!fs.existsSync(uploadDir)) {

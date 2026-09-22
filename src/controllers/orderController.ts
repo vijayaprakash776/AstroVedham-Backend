@@ -274,9 +274,17 @@ export const getOrderReport = async (req: CustomerAuthRequest, res: Response) =>
       });
     }
 
-    const reportPath = path.isAbsolute(order.pdfPath)
-      ? order.pdfPath
-      : path.resolve(process.cwd(), order.pdfPath);
+    const normalizedPath = order.pdfPath.replace(/\\/g, '/');
+    if (normalizedPath.includes('..')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid file path',
+      });
+    }
+
+    const reportPath = path.isAbsolute(normalizedPath)
+      ? normalizedPath
+      : path.resolve(process.cwd(), normalizedPath);
 
     // Verify the physical file exists
     if (!fs.existsSync(reportPath)) {
@@ -475,9 +483,14 @@ export const getGuestOrderReport = async (req: any, res: any) => {
       return res.status(404).json({ success: false, message: 'Horoscope report file not found' });
     }
 
-    const reportPath = path.isAbsolute(order.pdfPath)
-      ? order.pdfPath
-      : path.resolve(process.cwd(), order.pdfPath);
+    const normalizedPath = order.pdfPath.replace(/\\/g, '/');
+    if (normalizedPath.includes('..')) {
+      return res.status(403).json({ success: false, message: 'Invalid file path' });
+    }
+
+    const reportPath = path.isAbsolute(normalizedPath)
+      ? normalizedPath
+      : path.resolve(process.cwd(), normalizedPath);
 
     if (!fs.existsSync(reportPath)) {
       console.error(`Guest report file does not exist: ${reportPath}`);

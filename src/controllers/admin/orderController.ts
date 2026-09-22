@@ -99,11 +99,14 @@ export const uploadReport = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Can only upload reports for PENDING orders' });
     }
 
+    // Format pdfPath as a clean relative path relative to process.cwd() with POSIX forward slashes
+    const relativePdfPath = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
+
     const updatedOrder = await prisma.order.update({
       where: { orderNumber },
       data: {
         status: 'SUCCESS',
-        pdfPath: file.path,
+        pdfPath: relativePdfPath,
         resultAvailable: true,
         completedAt: new Date()
       }
