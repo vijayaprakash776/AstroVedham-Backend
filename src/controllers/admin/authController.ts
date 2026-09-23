@@ -4,9 +4,13 @@ import jwt from 'jsonwebtoken';
 import prisma from '../../config/prisma';
 
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-
   try {
+    const { email, password } = req.body || {};
+
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required' });
+    }
+
     const admin = await prisma.admin.findUnique({ where: { email } });
     if (!admin) {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -23,7 +27,7 @@ export const login = async (req: Request, res: Response) => {
       { expiresIn: '8h' }
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         token,
@@ -37,6 +41,12 @@ export const login = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Admin login error:', error);
-    res.status(500).json({ success: false, message: 'Server error', details: error?.message });
+    return res.status(500).json({
+      success: false,
+      message: 'Server error during login',
+      errorName: error?.name,
+      errorMessage: error?.message,
+      errorStack: error?.stack
+    });
   }
 };
