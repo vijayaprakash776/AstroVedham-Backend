@@ -1,7 +1,13 @@
 import { Router } from 'express';
-import { sendOtp, verifyOtp } from '../controllers/authController';
+import { checkPhone, sendOtp, verifyOtp } from '../controllers/authController';
 
 const router = Router();
+
+/**
+ * Check if customer mobile number exists
+ * POST /api/v1/auth/check-phone
+ */
+router.post('/check-phone', checkPhone);
 
 /**
  * Request passwordless phone verification code

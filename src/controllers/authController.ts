@@ -4,9 +4,51 @@ import crypto from 'crypto';
 import prisma from '../config/prisma';
 import { smsService } from '../services/smsService';
 
+// Phone normalization function
+export const normalizePhone = (phone: string): string => {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('91')) {
+    return digits.slice(-10);
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(-10);
+  }
+  return digits;
+};
+
 // Hash function for OTP
 const hashOtp = (otp: string): string => {
   return crypto.createHash('sha256').update(otp).digest('hex');
+};
+
+/**
+ * Check if customer mobile number already exists
+ * POST /api/v1/auth/check-phone
+ */
+export const checkPhone = async (req: Request, res: Response) => {
+  const { phone } = req.body;
+
+  if (!phone || typeof phone !== 'string' || phone.trim().length === 0) {
+    return res.status(400).json({ success: false, message: 'Valid phone number is required' });
+  }
+
+  const cleanedPhone = normalizePhone(phone);
+  if (cleanedPhone.length !== 10) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number' });
+  }
+
+  try {
+    const customer = await prisma.customer.findUnique({ where: { phone: cleanedPhone } });
+    return res.status(200).json({
+      success: true,
+      data: {
+        exists: !!customer
+      }
+    });
+  } catch (error) {
+    console.error('Check phone error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to check phone number' });
+  }
 };
 
 /**
@@ -14,13 +56,16 @@ const hashOtp = (otp: string): string => {
  * POST /api/v1/auth/send-otp
  */
 export const sendOtp = async (req: Request, res: Response) => {
-  const { phone } = req.body;
+  const { phone, name } = req.body;
 
   if (!phone || typeof phone !== 'string' || phone.trim().length === 0) {
     return res.status(400).json({ success: false, message: 'Valid phone number is required' });
   }
 
-  const cleanedPhone = phone.trim();
+  const cleanedPhone = normalizePhone(phone);
+  if (cleanedPhone.length !== 10) {
+    return res.status(400).json({ success: false, message: 'Please enter a valid 10-digit mobile number' });
+  }
 
   try {
     // Generate a secure 6 digit numeric code
@@ -32,22 +77,30 @@ export const sendOtp = async (req: Request, res: Response) => {
     const otpHash = hashOtp(otp);
     const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
 
-    // Check if customer exists, if not create a temporary shell or update existing
+    // Check if customer exists, if not create a shell or update existing
     let customer = await prisma.customer.findUnique({ where: { phone: cleanedPhone } });
+
+    const customerName = (name && typeof name === 'string' && name.trim().length > 0)
+      ? name.trim()
+      : 'User';
 
     if (!customer) {
       customer = await prisma.customer.create({
         data: {
           phone: cleanedPhone,
-          name: 'User',
+          name: customerName,
           otpHash,
           otpExpiresAt
         }
       });
     } else {
+      const updateData: any = { otpHash, otpExpiresAt };
+      if (name && typeof name === 'string' && name.trim().length > 0) {
+        updateData.name = name.trim();
+      }
       await prisma.customer.update({
         where: { id: customer.id },
-        data: { otpHash, otpExpiresAt }
+        data: updateData
       });
     }
 
@@ -75,7 +128,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: 'Phone number and verification code are required' });
   }
 
-  const cleanedPhone = phone.trim();
+  const cleanedPhone = normalizePhone(phone);
 
   try {
     const customer = await prisma.customer.findUnique({ where: { phone: cleanedPhone } });
