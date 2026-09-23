@@ -35,7 +35,8 @@ export const login = async (req: Request, res: Response) => {
         }
       }
     });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
+  } catch (error: any) {
+    console.error('Admin login error:', error);
+    res.status(500).json({ success: false, message: 'Server error', details: error?.message });
   }
 };

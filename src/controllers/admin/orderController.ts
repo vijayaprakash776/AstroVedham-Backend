@@ -95,12 +95,15 @@ export const uploadReport = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    if (order.status !== 'PENDING') {
-      return res.status(400).json({ success: false, message: 'Can only upload reports for PENDING orders' });
+    if (order.status !== 'PENDING' && order.status !== 'SUCCESS') {
+      return res.status(400).json({ success: false, message: 'Can only upload reports for PENDING or SUCCESS orders' });
     }
 
     // Format pdfPath as a clean relative path relative to process.cwd() with POSIX forward slashes
-    const relativePdfPath = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
+    let relativePdfPath = path.relative(process.cwd(), file.path).replace(/\\/g, '/');
+    if (relativePdfPath.startsWith('/')) {
+      relativePdfPath = relativePdfPath.substring(1);
+    }
 
     const updatedOrder = await prisma.order.update({
       where: { orderNumber },
