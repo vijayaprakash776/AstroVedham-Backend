@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../config/prisma';
 import { smsService } from '../services/smsService';
+import { firebaseAuth } from '../config/firebase';
 
 // Phone normalization function
 export const normalizePhone = (phone: string): string => {
@@ -19,6 +20,96 @@ export const normalizePhone = (phone: string): string => {
 // Hash function for OTP
 const hashOtp = (otp: string): string => {
   return crypto.createHash('sha256').update(otp).digest('hex');
+};
+
+/**
+ * Google Authentication via Firebase ID Token
+ * POST /api/v1/auth/google
+ */
+export const googleAuth = async (req: Request, res: Response) => {
+  const { idToken } = req.body;
+
+  if (!idToken || typeof idToken !== 'string' || idToken.trim().length === 0) {
+    return res.status(400).json({ success: false, message: 'Firebase ID token is required' });
+  }
+
+  try {
+    // Verify the Firebase ID token using Firebase Admin SDK
+    const decodedToken = await firebaseAuth.verifyIdToken(idToken.trim());
+    const firebaseUid = decodedToken.uid;
+    const verifiedEmail = decodedToken.email ? decodedToken.email.trim().toLowerCase() : null;
+    const displayName = decodedToken.name && decodedToken.name.trim().length > 0
+      ? decodedToken.name.trim()
+      : (verifiedEmail ? verifiedEmail.split('@')[0] : 'User');
+
+    if (!firebaseUid) {
+      return res.status(401).json({ success: false, message: 'Invalid Firebase ID token payload' });
+    }
+
+    let customer = null;
+
+    // CASE 1: Firebase UID already linked
+    customer = await prisma.customer.findUnique({
+      where: { firebaseUid }
+    });
+
+    // CASE 2: Existing Customer has exact verified email
+    if (!customer && verifiedEmail) {
+      customer = await prisma.customer.findUnique({
+        where: { email: verifiedEmail }
+      });
+
+      if (customer) {
+        // Safely link firebaseUid to existing customer
+        customer = await prisma.customer.update({
+          where: { id: customer.id },
+          data: { firebaseUid }
+        });
+        console.log(`[AUTH GOOGLE] Linked Firebase UID ${firebaseUid} to existing customer ${customer.id}`);
+      }
+    }
+
+    // CASE 3: No safe existing match -> Create new Customer
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          firebaseUid,
+          email: verifiedEmail,
+          name: displayName,
+          phone: null
+        }
+      });
+      console.log(`[AUTH GOOGLE] Created new customer ${customer.id} with Firebase UID ${firebaseUid}`);
+    }
+
+    // Generate existing AstroVedham JWT
+    const token = jwt.sign(
+      { id: customer.id, phone: customer.phone, role: 'CUSTOMER' },
+      process.env.JWT_SECRET || 'fallback_secret',
+      { expiresIn: '30d' }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Authentication successful',
+      data: {
+        token,
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email,
+          firebaseUid: customer.firebaseUid
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Google Auth verification error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Firebase token verification failed. Please try signing in again.'
+    });
+  }
 };
 
 /**

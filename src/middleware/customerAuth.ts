@@ -5,7 +5,7 @@ import prisma from '../config/prisma';
 export interface CustomerAuthRequest extends Request {
   customer?: {
     id: string;
-    phone: string;
+    phone: string | null;
     email: string | null;
     name: string;
   };

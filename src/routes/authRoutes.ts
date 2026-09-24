@@ -1,7 +1,13 @@
 import { Router } from 'express';
-import { checkPhone, sendOtp, verifyOtp } from '../controllers/authController';
+import { googleAuth, checkPhone, sendOtp, verifyOtp } from '../controllers/authController';
 
 const router = Router();
+
+/**
+ * Authenticate customer with Google (Firebase ID Token)
+ * POST /api/v1/auth/google
+ */
+router.post('/google', googleAuth);
 
 /**
  * Check if customer mobile number exists

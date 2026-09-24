@@ -21,7 +21,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 };
 
 export const getOrders = async (req: Request, res: Response) => {
-  const { status, horoscopeType, search, page = 1, limit = 10 } = req.query;
+  const { status, horoscopeType, search, fromDate, toDate, page = 1, limit = 10 } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
 
   try {
@@ -33,6 +33,49 @@ export const getOrders = async (req: Request, res: Response) => {
         { orderNumber: { contains: String(search), mode: 'insensitive' } },
         { customer: { name: { contains: String(search), mode: 'insensitive' } } }
       ];
+    }
+
+    // Date range validation and Prisma filtering
+    let startDate: Date | undefined;
+    let endDateExclusive: Date | undefined;
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (fromDate) {
+      const fromStr = String(fromDate).trim();
+      if (!dateRegex.test(fromStr)) {
+        return res.status(400).json({ success: false, message: 'Invalid date range' });
+      }
+      const [y, m, d] = fromStr.split('-').map(Number);
+      startDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+      if (isNaN(startDate.getTime()) || startDate.getUTCFullYear() !== y || startDate.getUTCMonth() !== m - 1 || startDate.getUTCDate() !== d) {
+        return res.status(400).json({ success: false, message: 'Invalid date range' });
+      }
+    }
+
+    if (toDate) {
+      const toStr = String(toDate).trim();
+      if (!dateRegex.test(toStr)) {
+        return res.status(400).json({ success: false, message: 'Invalid date range' });
+      }
+      const [y, m, d] = toStr.split('-').map(Number);
+      const endDateInclusive = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+      if (isNaN(endDateInclusive.getTime()) || endDateInclusive.getUTCFullYear() !== y || endDateInclusive.getUTCMonth() !== m - 1 || endDateInclusive.getUTCDate() !== d) {
+        return res.status(400).json({ success: false, message: 'Invalid date range' });
+      }
+      endDateExclusive = new Date(Date.UTC(y, m - 1, d + 1, 0, 0, 0, 0));
+    }
+
+    if (startDate && endDateExclusive) {
+      if (startDate >= endDateExclusive) {
+        return res.status(400).json({ success: false, message: 'Invalid date range' });
+      }
+    }
+
+    if (startDate || endDateExclusive) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = startDate;
+      if (endDateExclusive) where.createdAt.lt = endDateExclusive;
     }
 
     const [orders, total] = await Promise.all([

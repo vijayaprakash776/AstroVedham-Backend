@@ -22,7 +22,8 @@ model Admin {
 model Customer {
   id           String    @id @default(uuid())
   name         String
-  phone        String    @unique
+  phone        String?   @unique
+  firebaseUid  String?   @unique
   email        String?   @unique
   otpHash      String?
   otpExpiresAt DateTime?
