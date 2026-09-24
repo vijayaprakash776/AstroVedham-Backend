@@ -25,6 +25,7 @@ model Customer {
   phone        String?   @unique
   firebaseUid  String?   @unique
   email        String?   @unique
+  passwordHash String?
   otpHash      String?
   otpExpiresAt DateTime?
   orders       Order[]

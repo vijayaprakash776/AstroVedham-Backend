@@ -1,30 +1,18 @@
 import { Router } from 'express';
-import { googleAuth, checkPhone, sendOtp, verifyOtp } from '../controllers/authController';
+import { register, login } from '../controllers/authController';
 
 const router = Router();
 
 /**
- * Authenticate customer with Google (Firebase ID Token)
- * POST /api/v1/auth/google
+ * POST /api/v1/auth/register
+ * Customer Registration with Mobile Number + Password
  */
-router.post('/google', googleAuth);
+router.post('/register', register);
 
 /**
- * Check if customer mobile number exists
- * POST /api/v1/auth/check-phone
+ * POST /api/v1/auth/login
+ * Customer Login with Mobile Number + Password
  */
-router.post('/check-phone', checkPhone);
-
-/**
- * Request passwordless phone verification code
- * POST /api/v1/auth/send-otp
- */
-router.post('/send-otp', sendOtp);
-
-/**
- * Verify code and authenticate customer
- * POST /api/v1/auth/verify-otp
- */
-router.post('/verify-otp', verifyOtp);
+router.post('/login', login);
 
 export default router;
