@@ -4,6 +4,25 @@ import bcrypt from 'bcrypt';
 import prisma from '../config/prisma';
 import { getFirebaseAuth } from '../config/firebase';
 
+// Helper to mask email address for safe logging
+const maskEmail = (email?: string | null): string => {
+  if (!email) return 'none';
+  const parts = email.split('@');
+  if (parts.length !== 2) return 'invalid-email';
+  const name = parts[0];
+  const domain = parts[1];
+  const maskedName = name.length <= 2 ? name[0] + '*' : `${name[0]}***${name[name.length - 1]}`;
+  const maskedDomain = domain.length <= 4 ? domain : `${domain[0]}***${domain.slice(-2)}`;
+  return `${maskedName}@${maskedDomain}`;
+};
+
+// Helper to mask UID for safe logging
+const maskUid = (uid?: string | null): string => {
+  if (!uid) return 'none';
+  if (uid.length <= 6) return '***';
+  return `${uid.slice(0, 3)}***${uid.slice(-3)}`;
+};
+
 // Canonical phone normalization for Indian mobile numbers
 export const normalizePhone = (phone: string): string => {
   if (!phone) return '';
@@ -28,22 +47,44 @@ const isValidEmail = (email: string): boolean => {
  * POST /api/v1/auth/google
  */
 export const googleAuth = async (req: Request, res: Response) => {
-  try {
-    const { idToken } = req.body;
+  console.log('[AUTH GOOGLE] Request received');
 
-    if (!idToken || typeof idToken !== 'string') {
+  try {
+    const body = req.body || {};
+    const idToken = body.idToken;
+
+    console.log(`[AUTH GOOGLE] ID token received: ${idToken ? 'yes' : 'no'}`);
+
+    if (!idToken || typeof idToken !== 'string' || idToken.trim().length === 0) {
+      console.warn('[AUTH GOOGLE] Validation failed: missing or empty idToken');
       return res.status(400).json({
         success: false,
         message: 'Firebase ID token is required.'
       });
     }
 
-    // Verify Firebase ID token cryptographically
-    let decodedToken;
+    // 1. Verify Firebase ID token
+    console.log('[AUTH GOOGLE] Verifying Firebase ID token');
+    let decodedToken: any;
     try {
-      decodedToken = await getFirebaseAuth().verifyIdToken(idToken);
+      const auth = getFirebaseAuth();
+      decodedToken = await auth.verifyIdToken(idToken);
+      console.log('[AUTH GOOGLE] Firebase token verified successfully');
     } catch (authError: any) {
-      console.error('Firebase ID token verification failed:', authError);
+      console.error('[AUTH GOOGLE] Firebase ID token verification failed:', {
+        name: authError?.name,
+        message: authError?.message,
+        code: authError?.code,
+        stack: authError?.stack,
+      });
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication failed. Invalid Firebase token.'
+      });
+    }
+
+    if (!decodedToken) {
+      console.error('[AUTH GOOGLE] Decoded token is empty after verification');
       return res.status(401).json({
         success: false,
         message: 'Authentication failed. Invalid Firebase token.'
@@ -52,56 +93,126 @@ export const googleAuth = async (req: Request, res: Response) => {
 
     const { uid, email, name: displayName } = decodedToken;
 
+    console.log(`[AUTH GOOGLE] Firebase UID: ${maskUid(uid)}`);
+    console.log(`[AUTH GOOGLE] Firebase email present: ${email ? 'yes (' + maskEmail(email) + ')' : 'no'}`);
+
     if (!uid) {
+      console.error('[AUTH GOOGLE] Firebase UID missing from decoded token');
       return res.status(401).json({
         success: false,
         message: 'Authentication failed. Firebase UID missing.'
       });
     }
 
-    // 1. Search for customer by firebaseUid
-    let customer = await prisma.customer.findUnique({
-      where: { firebaseUid: uid }
-    });
+    // 2. Search customer by firebaseUid
+    console.log('[AUTH GOOGLE] Searching customer by firebaseUid');
+    let customer: any = null;
 
-    // 2. If not found by firebaseUid, check by email if available
+    try {
+      customer = await prisma.customer.findUnique({
+        where: { firebaseUid: uid }
+      });
+      console.log(`[AUTH GOOGLE] Customer found by firebaseUid: ${customer ? 'yes (ID: ' + customer.id + ')' : 'no'}`);
+    } catch (dbError: any) {
+      console.error('[AUTH GOOGLE] Database error searching customer by firebaseUid:', {
+        name: dbError?.name,
+        message: dbError?.message,
+        prismaCode: dbError?.code,
+        stack: dbError?.stack,
+      });
+      throw dbError;
+    }
+
+    // 3. Search customer by email if not found by firebaseUid
     if (!customer && email) {
       const cleanEmail = email.trim().toLowerCase();
-      const existingByEmail = await prisma.customer.findUnique({
-        where: { email: cleanEmail }
-      });
+      console.log(`[AUTH GOOGLE] Searching customer by email (${maskEmail(cleanEmail)})`);
 
-      if (existingByEmail) {
-        // Link firebaseUid to existing customer record
-        customer = await prisma.customer.update({
-          where: { id: existingByEmail.id },
-          data: { firebaseUid: uid }
+      try {
+        const existingByEmail = await prisma.customer.findUnique({
+          where: { email: cleanEmail }
         });
+
+        if (existingByEmail) {
+          console.log(`[AUTH GOOGLE] Customer found by email (ID: ${existingByEmail.id})`);
+          if (!existingByEmail.firebaseUid) {
+            console.log('[AUTH GOOGLE] Linking firebaseUid to existing customer record');
+            customer = await prisma.customer.update({
+              where: { id: existingByEmail.id },
+              data: { firebaseUid: uid }
+            });
+            console.log('[AUTH GOOGLE] Successfully linked firebaseUid to customer record');
+          } else {
+            console.log('[AUTH GOOGLE] Customer already has firebaseUid set');
+            customer = existingByEmail;
+          }
+        } else {
+          console.log('[AUTH GOOGLE] Customer not found by email');
+        }
+      } catch (dbEmailError: any) {
+        console.error('[AUTH GOOGLE] Database error searching/linking customer by email:', {
+          name: dbEmailError?.name,
+          message: dbEmailError?.message,
+          prismaCode: dbEmailError?.code,
+          stack: dbEmailError?.stack,
+        });
+        throw dbEmailError;
       }
     }
 
-    // 3. If still not found, create new customer
+    // 4. Create new customer if still not found
     if (!customer) {
+      console.log('[AUTH GOOGLE] Creating new customer');
       const cleanEmail = email ? email.trim().toLowerCase() : null;
       const cleanName = displayName
         ? displayName.trim()
         : (cleanEmail ? cleanEmail.split('@')[0] : 'AstroVedham User');
 
-      customer = await prisma.customer.create({
-        data: {
-          firebaseUid: uid,
-          email: cleanEmail,
-          name: cleanName,
-        }
-      });
+      try {
+        customer = await prisma.customer.create({
+          data: {
+            firebaseUid: uid,
+            email: cleanEmail,
+            name: cleanName,
+          }
+        });
+        console.log(`[AUTH GOOGLE] New customer created successfully (ID: ${customer.id})`);
+      } catch (createError: any) {
+        console.error('[AUTH GOOGLE] Database error creating new customer:', {
+          name: createError?.name,
+          message: createError?.message,
+          prismaCode: createError?.code,
+          stack: createError?.stack,
+        });
+        throw createError;
+      }
     }
 
-    // Generate AstroVedham JWT
-    const token = jwt.sign(
-      { id: customer.id, phone: customer.phone, role: 'CUSTOMER' },
-      process.env.JWT_SECRET || 'fallback_secret',
-      { expiresIn: '30d' }
-    );
+    // 5. Generate AstroVedham JWT
+    console.log('[AUTH GOOGLE] Generating AstroVedham JWT');
+    const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
+    if (!process.env.JWT_SECRET) {
+      console.warn('[AUTH GOOGLE] JWT_SECRET environment variable is not configured, using fallback secret');
+    }
+
+    let token: string;
+    try {
+      token = jwt.sign(
+        { id: customer.id, phone: customer.phone, role: 'CUSTOMER' },
+        jwtSecret,
+        { expiresIn: '30d' }
+      );
+      console.log('[AUTH GOOGLE] AstroVedham JWT generated successfully');
+    } catch (jwtError: any) {
+      console.error('[AUTH GOOGLE] Error generating JWT token:', {
+        name: jwtError?.name,
+        message: jwtError?.message,
+        stack: jwtError?.stack,
+      });
+      throw jwtError;
+    }
+
+    console.log('[AUTH GOOGLE] Authentication successful');
 
     return res.status(200).json({
       success: true,
@@ -118,8 +229,16 @@ export const googleAuth = async (req: Request, res: Response) => {
         }
       }
     });
+
   } catch (error: any) {
-    console.error('Google auth error:', error);
+    console.error('[AUTH GOOGLE] Server Error during Google Auth flow:', {
+      name: error?.name,
+      message: error?.message,
+      prismaCode: error?.code || null,
+      firebaseCode: error?.code || null,
+      stack: error?.stack,
+    });
+
     return res.status(500).json({
       success: false,
       message: 'Authentication failed due to a server error. Please try again.'
