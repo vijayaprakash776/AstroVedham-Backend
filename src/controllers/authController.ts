@@ -162,7 +162,7 @@ export const googleAuth = async (req: Request, res: Response) => {
 
     // 4. Create new customer if still not found
     if (!customer) {
-      console.log('[AUTH GOOGLE] Creating new customer');
+      console.log('[AUTH GOOGLE] Creating new customer without phone number');
       const cleanEmail = email ? email.trim().toLowerCase() : null;
       const cleanName = displayName
         ? displayName.trim()
@@ -174,6 +174,8 @@ export const googleAuth = async (req: Request, res: Response) => {
             firebaseUid: uid,
             email: cleanEmail,
             name: cleanName,
+            phone: null,
+            gender: null,
           }
         });
         console.log(`[AUTH GOOGLE] New customer created successfully (ID: ${customer.id})`);
@@ -242,6 +244,90 @@ export const googleAuth = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Authentication failed due to a server error. Please try again.'
+    });
+  }
+};
+
+/**
+ * Set missing mobile number for customer (Profile completion)
+ * PATCH /api/v1/auth/phone or POST /api/v1/auth/phone
+ */
+export const setPhone = async (req: any, res: Response) => {
+  try {
+    const customerId = req.customer?.id;
+    if (!customerId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { phone, mobile } = req.body || {};
+    const rawPhone = phone || mobile;
+
+    if (!rawPhone || typeof rawPhone !== 'string' || rawPhone.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid mobile number.'
+      });
+    }
+
+    const normalizedMobile = normalizePhone(rawPhone.trim());
+    const phoneRegex = /^[6-9][0-9]{9}$/;
+
+    if (!phoneRegex.test(normalizedMobile)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number must be exactly 10 digits starting with 6, 7, 8, or 9.'
+      });
+    }
+
+    const currentCustomer = await prisma.customer.findUnique({
+      where: { id: customerId }
+    });
+
+    if (!currentCustomer) {
+      return res.status(404).json({ success: false, message: 'Customer not found' });
+    }
+
+    if (currentCustomer.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Mobile number has already been set and cannot be modified.'
+      });
+    }
+
+    const existingPhoneCustomer = await prisma.customer.findUnique({
+      where: { phone: normalizedMobile }
+    });
+
+    if (existingPhoneCustomer) {
+      return res.status(400).json({
+        success: false,
+        message: 'This mobile number is already registered with another account.'
+      });
+    }
+
+    const updatedCustomer = await prisma.customer.update({
+      where: { id: customerId },
+      data: { phone: normalizedMobile },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        gender: true,
+        firebaseUid: true,
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Mobile number updated successfully.',
+      data: { customer: updatedCustomer }
+    });
+  } catch (error: any) {
+    console.error('Error setting phone number:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update mobile number. Please try again.'
     });
   }
 };
