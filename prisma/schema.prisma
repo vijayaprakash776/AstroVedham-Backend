@@ -26,7 +26,6 @@ model Customer {
   email        String?  @unique
   gender       String?
   firebaseUid  String?  @unique
-  passwordHash String?
   orders       Order[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
