@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { googleAuth, getMe, updateProfile, setPhone, register, login } from '../controllers/authController';
+import { googleAuth, getMe, updateProfile, setPhone } from '../controllers/authController';
 import { requireCustomerAuth } from '../middleware/customerAuth';
 
 const router = Router();
@@ -29,17 +29,5 @@ router.patch('/profile', requireCustomerAuth, updateProfile);
  */
 router.patch('/phone', requireCustomerAuth, setPhone);
 router.post('/phone', requireCustomerAuth, setPhone);
-
-/**
- * POST /api/v1/auth/register
- * Customer Registration (Legacy/Password fallback)
- */
-router.post('/register', register);
-
-/**
- * POST /api/v1/auth/login
- * Customer Login (Legacy/Password fallback)
- */
-router.post('/login', login);
 
 export default router;
